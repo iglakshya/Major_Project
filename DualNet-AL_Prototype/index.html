@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DualNet-AL | Active Learning Prototype</title>
+<style>
+:root{--bg:#f4f6fb;--card:#fff;--ink:#172033;--muted:#64748b;--line:#e5eaf2;--purple:#5546d8;--teal:#0f9f9a;--orange:#e99a35;--red:#d95d67}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);font:15px/1.5 Inter,system-ui,Arial,sans-serif;color:var(--ink)}
+header{background:linear-gradient(120deg,#25245e,#5546d8);color:white;padding:26px max(20px,calc((100% - 1160px)/2))}
+header .tag{font-size:12px;letter-spacing:.12em;text-transform:uppercase;opacity:.8;font-weight:700}
+h1{font-size:clamp(24px,4vw,36px);line-height:1.15;margin:8px 0}
+header p{margin:8px 0 0;opacity:.88;max-width:800px}
+main{max-width:1160px;margin:22px auto;padding:0 16px 40px}
+.notice{background:#fff8e9;border:1px solid #f4d89f;border-radius:12px;padding:12px 15px;color:#76531b;margin-bottom:18px;font-size:13px}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+.card,.kpi{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:0 3px 12px #1d2a4410}
+.kpi{padding:15px}.kpi small{color:var(--muted);display:block}.kpi strong{font-size:25px;display:block;margin-top:4px}
+.grid{display:grid;grid-template-columns:1.2fr .8fr;gap:16px}
+.card{padding:18px;margin-bottom:16px}.card h2{font-size:17px;margin:0 0 5px}.sub{color:var(--muted);font-size:13px;margin:0 0 14px}
+.pipeline{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;gap:8px;align-items:center;margin:14px 0}
+.step{border:1px solid var(--line);border-radius:10px;padding:12px;text-align:center;background:#fafbff}
+.step b{display:block;font-size:13px}.step span{font-size:11px;color:var(--muted)}.arrow{color:#8a91a5;font-size:20px}
+.controls{display:flex;gap:9px;flex-wrap:wrap;margin:14px 0}
+button{border:0;border-radius:9px;padding:10px 14px;font-weight:700;cursor:pointer;background:var(--purple);color:white}
+button.secondary{background:#edf0ff;color:#3930a5}button:disabled{opacity:.45;cursor:not-allowed}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;padding:9px 7px;border-bottom:1px solid var(--line)}th{color:var(--muted);font-weight:600}
+.pill{display:inline-block;border-radius:20px;padding:3px 8px;font-size:11px;font-weight:700;background:#eeeaff;color:#4c3dc5}
+.pill.done{background:#e4f7f2;color:#087d69}.barrow{display:grid;grid-template-columns:70px 1fr 28px;gap:8px;align-items:center;margin:12px 0;font-size:13px}
+.bar{height:10px;background:#edf0f5;border-radius:20px;overflow:hidden}.fill{height:100%;background:var(--teal);border-radius:20px}
+.metric{display:flex;justify-content:space-between;border-bottom:1px solid var(--line);padding:9px 0;font-size:13px}
+.metric span{color:var(--muted)}.foot{color:var(--muted);font-size:12px;text-align:center;margin-top:10px}
+.status{padding:10px 12px;border-radius:9px;background:#f0f7ff;color:#28558b;font-size:13px;margin-top:10px}
+@media(max-width:760px){.kpis{grid-template-columns:repeat(2,1fr)}.grid{grid-template-columns:1fr}.pipeline{grid-template-columns:1fr}.arrow{transform:rotate(90deg);text-align:center}}
+</style>
+</head>
+<body>
+<header>
+ <div class="tag">B.Tech Major Project • Interactive Demonstrator</div>
+ <h1>DualNet-AL</h1>
+ <p>Bi-Network Meta-Learning Framework for Multi-Class Active Learning</p>
+</header>
+<main>
+ <div class="notice"><b>Prototype note:</b> This is a working concept-level simulation using synthetic sample records and illustrative scoring rules. It is not yet a trained CNN, learned meta-learner, or experimental result on CIFAR datasets.</div>
+ <section class="kpis">
+  <div class="kpi"><small>Unlabelled pool</small><strong id="poolCount">24</strong></div>
+  <div class="kpi"><small>Labelled samples</small><strong id="labelCount">6</strong></div>
+  <div class="kpi"><small>Selected this round</small><strong id="roundCount">0</strong></div>
+  <div class="kpi"><small>Active learning rounds</small><strong id="rounds">0</strong></div>
+ </section>
+ <div class="grid">
+  <div>
+   <section class="card">
+    <h2>System workflow</h2><p class="sub">Two cooperating modules separate classification from sample selection.</p>
+    <div class="pipeline">
+     <div class="step"><b>Task Network</b><span>Illustrative class prediction & uncertainty</span></div><div class="arrow">→</div>
+     <div class="step"><b>Query Network</b><span>Uncertainty + class-balance score</span></div><div class="arrow">→</div>
+     <div class="step"><b>Labelled Pool</b><span>Selected samples added for next round</span></div>
+    </div>
+    <div class="controls">
+     <button id="runBtn" onclick="runRound()">Run active-learning round (select 5)</button>
+     <button class="secondary" onclick="resetDemo()">Reset simulation</button>
+    </div>
+    <div id="status" class="status">Ready. Run a round to select the most informative samples from the synthetic pool.</div>
+   </section>
+   <section class="card">
+    <h2>Unlabelled sample pool</h2><p class="sub">Top-ranked samples are selected using the prototype query score.</p>
+    <div style="overflow-x:auto">
+     <table><thead><tr><th>Sample</th><th>Task prediction</th><th>Uncertainty</th><th>Balance signal</th><th>Query score</th><th>Status</th></tr></thead><tbody id="poolRows"></tbody></table>
+    </div>
+   </section>
+  </div>
+  <div>
+   <section class="card">
+    <h2>Label distribution</h2><p class="sub">Illustrative count of labelled samples across three classes.</p>
+    <div id="distribution"></div>
+   </section>
+   <section class="card">
+    <h2>Prototype scoring</h2><p class="sub">Transparent demonstration formula (not learned parameters).</p>
+    <div class="metric"><span>Uncertainty contribution</span><b>60%</b></div>
+    <div class="metric"><span>Class-balance contribution</span><b>40%</b></div>
+    <div class="metric"><span>Selection batch size</span><b>5 samples</b></div>
+    <div class="metric"><span>Data source</span><b>Synthetic demo</b></div>
+   </section>
+   <section class="card">
+    <h2>Next implementation milestones</h2>
+    <div class="metric"><span>Real dataset loading (CIFAR)</span><b>Pending</b></div>
+    <div class="metric"><span>CNN Task Network</span><b>Pending</b></div>
+    <div class="metric"><span>Trainable Query Network</span><b>Pending</b></div>
+    <div class="metric"><span>Baseline comparison & metrics</span><b>Pending</b></div>
+    <div class="metric"><span>Dashboard integration</span><b>Concept demo</b></div>
+   </section>
+  </div>
+ </div>
+ <div class="foot">DualNet-AL • Phase-I report-based concept prototype • Synthetic data only • No real model accuracy is claimed</div>
+</main>
+<script>
+const classes=["Class A","Class B","Class C"];
+let initial, pool, counts, rounds=0, lastSelected=0;
+function makeData(){
+ let arr=[];
+ for(let i=1;i<=24;i++){
+  const pred=classes[(i*7+i%3)%3];
+  const uncertainty=+(0.25+((i*17)%67)/100).toFixed(2);
+  arr.push({id:"S"+String(i).padStart(2,"0"),pred,uncertainty,selected:false});
+ }
+ return arr;
+}
+function init(){
+ initial=makeData(); pool=JSON.parse(JSON.stringify(initial));
+ counts={"Class A":2,"Class B":2,"Class C":2};rounds=0;lastSelected=0;
+ render();
+ document.getElementById("status").textContent="Ready. Run a round to select the most informative samples from the synthetic pool.";
+}
+function score(s){
+ const max=Math.max(...Object.values(counts));
+ const classCount=counts[s.pred]||0;
+ const balance=max===0?1:(max-classCount+1)/(max+1);
+ return +(0.6*s.uncertainty+0.4*balance).toFixed(3);
+}
+function render(){
+ const available=pool.filter(x=>!x.selected);
+ document.getElementById("poolCount").textContent=available.length;
+ document.getElementById("labelCount").textContent=Object.values(counts).reduce((a,b)=>a+b,0);
+ document.getElementById("roundCount").textContent=lastSelected;
+ document.getElementById("rounds").textContent=rounds;
+ const sorted=[...available].sort((a,b)=>score(b)-score(a));
+ document.getElementById("poolRows").innerHTML=sorted.map(s=>`<tr><td><b>${s.id}</b></td><td>${s.pred}</td><td>${s.uncertainty.toFixed(2)}</td><td>${(Math.max(...Object.values(counts))-counts[s.pred]+1)/(Math.max(...Object.values(counts))+1)}</td><td><b>${score(s).toFixed(3)}</b></td><td><span class="pill">Unlabelled</span></td></tr>`).join("") || '<tr><td colspan="6">No unlabelled samples remain.</td></tr>';
+ document.getElementById("distribution").innerHTML=classes.map(c=>{
+  const n=counts[c], total=Object.values(counts).reduce((a,b)=>a+b,0), pct=total?Math.round(n/total*100):0;
+  return `<div class="barrow"><b>${c}</b><div class="bar"><div class="fill" style="width:${pct}%"></div></div><span>${n}</span></div>`;
+ }).join("");
+ document.getElementById("runBtn").disabled=available.length===0;
+}
+function runRound(){
+ const available=pool.filter(x=>!x.selected);
+ if(!available.length)return;
+ const selected=[...available].sort((a,b)=>score(b)-score(a)).slice(0,Math.min(5,available.length));
+ selected.forEach(s=>{s.selected=true;counts[s.pred]++;});
+ rounds++;lastSelected=selected.length;
+ document.getElementById("status").textContent=`Round ${rounds} complete: ${selected.map(s=>s.id).join(", ")} selected and added to the illustrative labelled pool.`;
+ render();
+}
+function resetDemo(){init();}
+init();
+</script>
+</body>
+</html>
